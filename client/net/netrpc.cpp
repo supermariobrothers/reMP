@@ -105,17 +105,17 @@ void InitGame(RPCParameters *rpcParams)
 	pNetGame->m_bDisableEnterExits = bsInitGame.ReadBit();
 	pNetGame->m_bNameTagLOS = bsInitGame.ReadBit();
 	pNetGame->m_bTirePopping = bsInitGame.ReadBit();
-	bsInitGame.ReadBits((unsigned char*)&pNetGame->m_iDeathDropMoney, 32);
-	bsInitGame.ReadBits((unsigned char*)&MyPlayerID, 16);
-	pNetGame->m_bShowPlayerMarkers = bsInitGame.ReadBit();
 	bsInitGame.ReadBits((unsigned char*)&pNetGame->m_iSpawnsAvailable, 32);
+	bsInitGame.ReadBits((unsigned char*)&MyPlayerID, 16);
+	pNetGame->m_bShowPlayerTags = bsInitGame.ReadBit();
+	DWORD dwShowPlayerMarkers = 0;
+	bsInitGame.ReadBits((unsigned char*)&dwShowPlayerMarkers, 32);
+	pNetGame->m_bShowPlayerMarkers = (dwShowPlayerMarkers != 0);
 	bsInitGame.ReadBits((unsigned char*)&pNetGame->m_byteWorldTime, 8);
 	bsInitGame.ReadBits((unsigned char*)&pNetGame->m_byteWeather, 8);
 	bsInitGame.ReadBits((unsigned char*)&pNetGame->m_fGravity, 32);
 	bLanMode = bsInitGame.ReadBit();
-	DWORD dwUnk1 = 0;
-	bsInitGame.ReadBits((unsigned char*)&dwUnk1, 32);
-	pNetGame->m_bShowPlayerTags = bsInitGame.ReadBit();
+	bsInitGame.ReadBits((unsigned char*)&pNetGame->m_iDeathDropMoney, 32);
 
 	// Server's send rate restrictions & nametag status
 	bsInitGame.ReadBits((unsigned char*)&iNetModeIdleOnfootSendRate, 32);
@@ -136,8 +136,8 @@ void InitGame(RPCParameters *rpcParams)
 	bsInitGame.Read((char*)byteVehicleModels, 212);
 	pGame->SetRequiredVehicleModels(byteVehicleModels);
 
-	DWORD dwVehicleHeadlight = 0;
-	bsInitGame.ReadBits((unsigned char*)&dwVehicleHeadlight, 32);
+	DWORD dwVehicleFriendlyFire = 0;
+	bsInitGame.ReadBits((unsigned char*)&dwVehicleFriendlyFire, 32);
 
 	LogDebug("InitGame: SpawnsAvailable=%d, MyPlayerID=%d, HostName='%s'",
 		pNetGame->m_iSpawnsAvailable, (int)MyPlayerID, pNetGame->m_szHostName);
@@ -366,7 +366,8 @@ void RequestSpawn(RPCParameters *rpcParams)
 	if (pPlayerPool) pPlayer = pPlayerPool->GetLocalPlayer();
 
 	if (pPlayer) { 
-		if (byteRequestOutcome == 2 || (byteRequestOutcome && pPlayer->m_bWaitingForSpawnRequestReply)) {
+		LogDebug("[RPC] RequestSpawn: outcome=%d, waiting=%d", byteRequestOutcome, pPlayer->m_bWaitingForSpawnRequestReply);
+		if (byteRequestOutcome != 0) {
 			pPlayer->Spawn();
 		}
 		else {
@@ -486,16 +487,14 @@ void WorldVehicleAdd(RPCParameters *rpcParams)
 	if(!pVehiclePool) return;
 
 	NEW_VEHICLE NewVehicle;
+	memset(&NewVehicle, 0, sizeof(NEW_VEHICLE));
 
-	bsData.Read((char *)&NewVehicle,sizeof(NEW_VEHICLE));
+	bsData.Read((char *)&NewVehicle, sizeof(NEW_VEHICLE));
 
-	//pChatWindow->AddDebugMessage("WorldVehicleAdd(%u)",NewVehicle.VehicleId);
+	LogDebug("[RPC] WorldVehicleAdd: id=%u, type=%d, pos=(%.1f, %.1f, %.1f)",
+		NewVehicle.VehicleId, NewVehicle.iVehicleType, NewVehicle.vecPos.X, NewVehicle.vecPos.Y, NewVehicle.vecPos.Z);
 
 	if(NewVehicle.iVehicleType < 400 || NewVehicle.iVehicleType > 611) return; 
-	
-	//pGame->RequestModel(NewVehicle.iVehicleType);
-	//_beginthread(LoadRequestedModelsThread,0,NULL); // <- leet crash CRenderer:ConstructRenderList
-	//pGame->LoadRequestedModels();
 
     pVehiclePool->New(&NewVehicle);    
 }

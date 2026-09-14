@@ -1400,15 +1400,18 @@ void CLocalPlayer::ProcessClassSelection(int iControlID)
 	// Brief 250ms debounce
 	if((GetTickCount() - m_dwInitialSelectionTick) < 250) return;
 
-	// Check spawn/confirm keys: Shift or UI button
+	// Check spawn/confirm keys: Shift, Return, Space or UI button
 	BOOL bSpawnPressed = (iControlID == ID_CONTROL_SPAWN) ||
-		((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0);
+		((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) ||
+		((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0) ||
+		((GetAsyncKeyState(VK_SPACE) & 0x8000) != 0);
 
 	if( !m_bWaitingForSpawnRequestReply &&
 		m_bClearedToSpawn && 
 		bSpawnPressed &&
 		!pCmdWindow->isEnabled() )
 	{
+		LogDebug("ProcessClassSelection: Spawn requested! SelectedClass=%d", m_iSelectedClass);
 		if (pSpawnScreen) pSpawnScreen->ToggleVisibility(FALSE);
 		if (pD3DDevice) pD3DDevice->ShowCursor(FALSE);
 		RequestSpawn();

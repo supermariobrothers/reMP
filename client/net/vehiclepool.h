@@ -14,10 +14,11 @@ typedef struct _NEW_VEHICLE {
 	char	  aColor2;
 	float	  fHealth;
 	BYTE	  byteInterior;
-	BYTE	  byteDoorsLocked;
 	DWORD	  dwDoorDamageStatus;
 	DWORD	  dwPanelDamageStatus;
 	BYTE	  byteLightDamageStatus;
+	BYTE	  byteTireDamageStatus;
+	BYTE	  byteDoorsLocked;
 } NEW_VEHICLE;
 
 //----------------------------------------------------
