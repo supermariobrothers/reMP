@@ -19,6 +19,10 @@ typedef struct _NEW_VEHICLE {
 	BYTE	  byteLightDamageStatus;
 	BYTE	  byteTireDamageStatus;
 	BYTE	  byteDoorsLocked;
+	BYTE	  byteModSlots[14];
+	BYTE	  bytePaintJob;
+	DWORD	  dwBodyColor1;
+	DWORD	  dwBodyColor2;
 } NEW_VEHICLE;
 
 //----------------------------------------------------

@@ -81,7 +81,9 @@ void CRemotePlayer::Process()
 				}
 
 				// UPDATE ROTATION
-				m_pPlayerPed->SetTargetRotation(m_ofSync.fRotation);
+				float fRot = atan2f(-2.0f * (m_ofSync.fQuaternion[1] * m_ofSync.fQuaternion[2] - m_ofSync.fQuaternion[3] * m_ofSync.fQuaternion[0]),
+									1.0f - 2.0f * (m_ofSync.fQuaternion[2] * m_ofSync.fQuaternion[2] + m_ofSync.fQuaternion[3] * m_ofSync.fQuaternion[3])) * (180.0f / 3.14159265f);
+				m_pPlayerPed->SetTargetRotation(fRot);
 		
 				// UPDATE CURRENT WEAPON
 				if(m_pPlayerPed->IsAdded() && m_pPlayerPed->GetCurrentWeapon() != m_ofSync.byteCurrentWeapon) {
@@ -117,8 +119,12 @@ void CRemotePlayer::Process()
 				if(!m_pCurrentVehicle) return;
                
 				// MATRIX
-				DecompressNormalVector(&matVehicle.right,&m_icSync.cvecRoll);
-				DecompressNormalVector(&matVehicle.up,&m_icSync.cvecDirection);
+				D3DXQUATERNION quat(m_icSync.fQuaternion[1], m_icSync.fQuaternion[2], m_icSync.fQuaternion[3], m_icSync.fQuaternion[0]);
+				D3DXMATRIX matD3D;
+				D3DXMatrixRotationQuaternion(&matD3D, &quat);
+				matVehicle.right.X = matD3D._11; matVehicle.right.Y = matD3D._12; matVehicle.right.Z = matD3D._13;
+				matVehicle.up.X    = matD3D._21; matVehicle.up.Y    = matD3D._22; matVehicle.up.Z    = matD3D._23;
+				matVehicle.at.X    = matD3D._31; matVehicle.at.Y    = matD3D._32; matVehicle.at.Z    = matD3D._33;
 
 				matVehicle.pos.X = m_icSync.vecPos.X;
 				matVehicle.pos.Y = m_icSync.vecPos.Y;
@@ -142,20 +148,6 @@ void CRemotePlayer::Process()
 					// GENERIC VEHICLE MATRIX UPDATE
 					UpdateInCarMatrixAndSpeed(matVehicle,vecMoveSpeed);
 					UpdateIncarTargetPosition();
-					
-					// FOR TIRE POPPING
-					if (pNetGame->m_bTirePopping) {
-						if (m_pCurrentVehicle->GetVehicleSubtype() == VEHICLE_SUBTYPE_BIKE) {
-							m_pCurrentVehicle->SetWheelPopped(0, m_icSync.byteTires[0]);
-							m_pCurrentVehicle->SetWheelPopped(1, m_icSync.byteTires[1]);
-						} 
-						else if ( m_pCurrentVehicle->GetVehicleSubtype() == VEHICLE_SUBTYPE_CAR ) {
-							m_pCurrentVehicle->SetWheelPopped(0, m_icSync.byteTires[0]);
-							m_pCurrentVehicle->SetWheelPopped(1, m_icSync.byteTires[1]);
-							m_pCurrentVehicle->SetWheelPopped(2, m_icSync.byteTires[2]);
-							m_pCurrentVehicle->SetWheelPopped(3, m_icSync.byteTires[3]);
-						}
-					}
 				}
 
 				// HYDRA THRUSTERS
@@ -239,7 +231,6 @@ void CRemotePlayer::Process()
 			if(GetState() == PLAYER_STATE_ONFOOT) {
 				m_bPassengerDriveByMode = FALSE;
 				ProcessSpecialActions(m_ofSync.byteSpecialAction);
-				m_pPlayerPed->SetTargetRotation(m_ofSync.fRotation);
 				m_pPlayerPed->SetKeys(m_ofSync.wKeys,m_ofSync.lrAnalog,m_ofSync.udAnalog);
 				
 				if(IsSurfingOrTurretMode()) {
@@ -779,9 +770,9 @@ void CRemotePlayer::UpdateAimFromSyncData(AIM_SYNC_DATA *paimSync)
 	Aim.f1x = paimSync->vecAimf1.X;
 	Aim.f1y = paimSync->vecAimf1.Y;
 	Aim.f1z = paimSync->vecAimf1.Z;
-	Aim.f2x = paimSync->vecAimf2.X;
-	Aim.f2y = paimSync->vecAimf2.Y;
-	Aim.f2z = paimSync->vecAimf2.Z;
+	Aim.f2x = paimSync->vecAimf1.X;
+	Aim.f2y = paimSync->vecAimf1.Y;
+	Aim.f2z = paimSync->vecAimf1.Z;
 	Aim.pos1x = paimSync->vecAimPos.X;
 	Aim.pos1y = paimSync->vecAimPos.Y;
 	Aim.pos1z = paimSync->vecAimPos.Z;

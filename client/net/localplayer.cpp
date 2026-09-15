@@ -708,6 +708,7 @@ void CLocalPlayer::SendOnFootFullSyncData()
 	WORD wKeys = m_pPlayerPed->GetKeys(&lrAnalog,&udAnalog);
 	
 	ONFOOT_SYNC_DATA ofSync;
+	memset(&ofSync, 0, sizeof(ONFOOT_SYNC_DATA));
 
 	m_pPlayerPed->GetMatrix(&matPlayer);
 	m_pPlayerPed->GetMoveSpeedVector(&vecMoveSpeed);
@@ -720,8 +721,20 @@ void CLocalPlayer::SendOnFootFullSyncData()
 	ofSync.vecPos.Y = matPlayer.pos.Y;
 	ofSync.vecPos.Z = matPlayer.pos.Z;
 
-	// Rotation stuff
-	ofSync.fRotation = m_pPlayerPed->GetTargetRotation();
+	// Rotation quaternion
+	D3DXMATRIX mat;
+	mat._11 = matPlayer.right.X; mat._12 = matPlayer.right.Y; mat._13 = matPlayer.right.Z; mat._14 = 0.0f;
+	mat._21 = matPlayer.up.X;    mat._22 = matPlayer.up.Y;    mat._23 = matPlayer.up.Z;    mat._24 = 0.0f;
+	mat._31 = matPlayer.at.X;    mat._32 = matPlayer.at.Y;    mat._33 = matPlayer.at.Z;    mat._34 = 0.0f;
+	mat._41 = 0.0f;              mat._42 = 0.0f;              mat._43 = 0.0f;              mat._44 = 1.0f;
+
+	D3DXQUATERNION quat;
+	D3DXQuaternionRotationMatrix(&quat, &mat);
+	ofSync.fQuaternion[0] = quat.w;
+	ofSync.fQuaternion[1] = quat.x;
+	ofSync.fQuaternion[2] = quat.y;
+	ofSync.fQuaternion[3] = quat.z;
+
 	ofSync.byteHealth = (BYTE)m_pPlayerPed->GetHealth();
 	ofSync.byteArmour = (BYTE)m_pPlayerPed->GetArmour();
 	
@@ -744,9 +757,23 @@ void CLocalPlayer::SendOnFootFullSyncData()
 		ofSync.wSurfInfo = 0;
 	}
 
+	ofSync.wAnimIndex = 0;
+	ofSync.wAnimFlags = 0;
+
 	bsPlayerSync.Write((BYTE)ID_PLAYER_SYNC);
 	bsPlayerSync.Write((PCHAR)&ofSync,sizeof(ONFOOT_SYNC_DATA));
 	pNetGame->GetRakClient()->Send(&bsPlayerSync,HIGH_PRIORITY,UNRELIABLE_SEQUENCED,0);
+
+	static DWORD dwLastDbgOnfoot = 0;
+	if (GetTickCount() - dwLastDbgOnfoot > 2000) {
+		dwLastDbgOnfoot = GetTickCount();
+		LogDebug("[OUT PKT] ID_PLAYER_SYNC (len: %d, pos: %.1f, %.1f, %.1f, health: %d)",
+			sizeof(ONFOOT_SYNC_DATA), ofSync.vecPos.X, ofSync.vecPos.Y, ofSync.vecPos.Z, ofSync.byteHealth);
+		if (pChatWindow) {
+			pChatWindow->AddDebugMessage("[OUT PKT] ID_PLAYER_SYNC (len: %d, pos: %.1f, %.1f, %.1f)",
+				sizeof(ONFOOT_SYNC_DATA), ofSync.vecPos.X, ofSync.vecPos.Y, ofSync.vecPos.Z);
+		}
+	}
 }
 
 //----------------------------------------------------------
@@ -755,6 +782,7 @@ void CLocalPlayer::SendAimSyncData()
 {
 	RakNet::BitStream bsAimSync;
 	AIM_SYNC_DATA aimSync;
+	memset(&aimSync, 0, sizeof(AIM_SYNC_DATA));
 	CAMERA_AIM * caAim = m_pPlayerPed->GetCurrentAim();
 
 	aimSync.byteCamMode = m_pPlayerPed->GetCameraMode();
@@ -762,9 +790,6 @@ void CLocalPlayer::SendAimSyncData()
 	aimSync.vecAimf1.X = caAim->f1x;
 	aimSync.vecAimf1.Y = caAim->f1y;
 	aimSync.vecAimf1.Z = caAim->f1z;
-	aimSync.vecAimf2.X = caAim->f2x;
-	aimSync.vecAimf2.Y = caAim->f2y;
-	aimSync.vecAimf2.Z = caAim->f2z;
 
 	aimSync.vecAimPos.X = caAim->pos1x;
 	aimSync.vecAimPos.Y = caAim->pos1y;
@@ -775,14 +800,23 @@ void CLocalPlayer::SendAimSyncData()
 	aimSync.byteCamExtZoom = (BYTE)(m_pPlayerPed->GetCameraExtendedZoom() * 63.0f);
 	
 	WEAPON_SLOT_TYPE* pwstWeapon = m_pPlayerPed->GetCurrentWeaponSlot();
-	if (pwstWeapon->dwState == 2)
+	if (pwstWeapon && pwstWeapon->dwState == 2)
 		aimSync.byteWeaponState = WS_RELOADING;
-	else
-		aimSync.byteWeaponState = (pwstWeapon->dwAmmoInClip > 1) ? WS_MORE_BULLETS : pwstWeapon->dwAmmoInClip;
+	float fAspectRatio = *(float*)0x00C3EFA4;
+	aimSync.byteAspectRatio = (BYTE)(fAspectRatio * 255.0f);
 
 	bsAimSync.Write((BYTE)ID_AIM_SYNC);
 	bsAimSync.Write((PCHAR)&aimSync,sizeof(AIM_SYNC_DATA));
 	pNetGame->GetRakClient()->Send(&bsAimSync,HIGH_PRIORITY,UNRELIABLE_SEQUENCED,0);
+
+	static DWORD dwLastDbgAim = 0;
+	if (GetTickCount() - dwLastDbgAim > 3000) {
+		dwLastDbgAim = GetTickCount();
+		LogDebug("[OUT PKT] ID_AIM_SYNC (len: %d, cam: %u)", sizeof(AIM_SYNC_DATA), aimSync.byteCamMode);
+		if (pChatWindow) {
+			pChatWindow->AddDebugMessage("[OUT PKT] ID_AIM_SYNC (len: %d, cam: %u)", sizeof(AIM_SYNC_DATA), aimSync.byteCamMode);
+		}
+	}
 }
 
 //----------------------------------------------------------
@@ -800,6 +834,7 @@ void CLocalPlayer::SendInCarFullSyncData()
 	CVehicle *pGameVehicle=NULL;
 	
 	INCAR_SYNC_DATA icSync;
+	memset(&icSync, 0, sizeof(INCAR_SYNC_DATA));
 
 	if(m_pPlayerPed)
 	{
@@ -817,8 +852,18 @@ void CLocalPlayer::SendInCarFullSyncData()
 
 		pGameVehicle->GetMatrix(&matPlayer);
 
-		CompressNormalVector(&matPlayer.right,&icSync.cvecRoll);
-		CompressNormalVector(&matPlayer.up,&icSync.cvecDirection);
+		D3DXMATRIX mat;
+		mat._11 = matPlayer.right.X; mat._12 = matPlayer.right.Y; mat._13 = matPlayer.right.Z; mat._14 = 0.0f;
+		mat._21 = matPlayer.up.X;    mat._22 = matPlayer.up.Y;    mat._23 = matPlayer.up.Z;    mat._24 = 0.0f;
+		mat._31 = matPlayer.at.X;    mat._32 = matPlayer.at.Y;    mat._33 = matPlayer.at.Z;    mat._34 = 0.0f;
+		mat._41 = 0.0f;              mat._42 = 0.0f;              mat._43 = 0.0f;              mat._44 = 1.0f;
+
+		D3DXQUATERNION quat;
+		D3DXQuaternionRotationMatrix(&quat, &mat);
+		icSync.fQuaternion[0] = quat.w;
+		icSync.fQuaternion[1] = quat.x;
+		icSync.fQuaternion[2] = quat.y;
+		icSync.fQuaternion[3] = quat.z;
 
 		icSync.vecPos.X = matPlayer.pos.X;
 		icSync.vecPos.Y = matPlayer.pos.Y;
@@ -834,28 +879,12 @@ void CLocalPlayer::SendInCarFullSyncData()
 		icSync.bytePlayerHealth = (BYTE)m_pPlayerPed->GetHealth();
 		icSync.bytePlayerArmour = (BYTE)m_pPlayerPed->GetArmour();
 
-		// Note: Train Speed and Tire Popping values are mutually exclusive, which means
-		//       if one is set, the other one will be affected.
-
 		if( pGameVehicle->GetModelIndex() == TRAIN_PASSENGER_LOCO ||
 			pGameVehicle->GetModelIndex() == TRAIN_FREIGHT_LOCO ||
 			pGameVehicle->GetModelIndex() == TRAIN_TRAM) {
 				icSync.fTrainSpeed = pGameVehicle->GetTrainSpeed();
 		} else {
 			icSync.fTrainSpeed = 0.0f;
-			if (pNetGame->m_bTirePopping) {
-				if (pGameVehicle->GetVehicleSubtype() == VEHICLE_SUBTYPE_BIKE) {
-					icSync.byteTires[0] = pGameVehicle->GetWheelPopped(0);
-					icSync.byteTires[1] = pGameVehicle->GetWheelPopped(1);
-					icSync.byteTires[2] = 0;
-					icSync.byteTires[3] = 0;
-				} else if ( pGameVehicle->GetVehicleSubtype() == VEHICLE_SUBTYPE_CAR) {
-					icSync.byteTires[0] = pGameVehicle->GetWheelPopped(0);
-					icSync.byteTires[1] = pGameVehicle->GetWheelPopped(1);
-					icSync.byteTires[2] = pGameVehicle->GetWheelPopped(2);
-					icSync.byteTires[3] = pGameVehicle->GetWheelPopped(3);
-				}
-			}
 		}
 	
 		icSync.TrailerID = 0;
@@ -875,11 +904,6 @@ void CLocalPlayer::SendInCarFullSyncData()
 		if(pGameVehicle->GetModelIndex() == HYDRA)
 			icSync.dwHydraThrustAngle = pGameVehicle->GetHydraThrusters();
 		else icSync.dwHydraThrustAngle = 0;
-		
-		// Some other SPECIAL sync stuff (these can be optimized for specific vehicles, someday!)
-		//icSync.byteFlags = 0;
-		//if (pGameVehicle->IsSirenOn()) icSync.bitSirenState = 1;
-		//if (pGameVehicle->AreLightsEnabled()) icSync.bitLightState = 1;
 
 		if(pGameVehicle->IsSirenOn()) icSync.byteSirenOn = 1;
 		else icSync.byteSirenOn = 0;
@@ -900,6 +924,17 @@ void CLocalPlayer::SendInCarFullSyncData()
 		bsVehicleSync.Write((BYTE)ID_VEHICLE_SYNC);
 		bsVehicleSync.Write((PCHAR)&icSync,sizeof(INCAR_SYNC_DATA));
 		pNetGame->GetRakClient()->Send(&bsVehicleSync,HIGH_PRIORITY,UNRELIABLE_SEQUENCED,0);
+
+		static DWORD dwLastDbgIncar = 0;
+		if (GetTickCount() - dwLastDbgIncar > 2000) {
+			dwLastDbgIncar = GetTickCount();
+			LogDebug("[OUT PKT] ID_VEHICLE_SYNC (len: %d, veh: %u, pos: %.1f, %.1f, %.1f)",
+				sizeof(INCAR_SYNC_DATA), icSync.VehicleID, icSync.vecPos.X, icSync.vecPos.Y, icSync.vecPos.Z);
+			if (pChatWindow) {
+				pChatWindow->AddDebugMessage("[OUT PKT] ID_VEHICLE_SYNC (len: %d, veh: %u)",
+					sizeof(INCAR_SYNC_DATA), icSync.VehicleID);
+			}
+		}
 
 		// For the tank/firetruck, we need some info on aiming
 		if (pGameVehicle->HasTurret()) SendAimSyncData();		
@@ -1075,6 +1110,8 @@ void CLocalPlayer::RequestClass(int iClass)
 	RakNet::BitStream bsSpawnRequest;
 	bsSpawnRequest.Write(iClass);
 	pNetGame->GetRakClient()->RPC(&RPC_RequestClass,&bsSpawnRequest,HIGH_PRIORITY,RELIABLE,0,false, UNASSIGNED_NETWORK_ID, NULL);
+	LogDebug("[OUT RPC] RPC_RequestClass (class: %d)", iClass);
+	if (pChatWindow) pChatWindow->AddDebugMessage("[OUT RPC] RPC_RequestClass (class: %d)", iClass);
 }
 
 //----------------------------------------------------------
@@ -1083,6 +1120,8 @@ void CLocalPlayer::RequestSpawn()
 {
 	RakNet::BitStream bsSpawnRequest;
 	pNetGame->GetRakClient()->RPC(&RPC_RequestSpawn,&bsSpawnRequest,HIGH_PRIORITY,RELIABLE,0,false, UNASSIGNED_NETWORK_ID, NULL);
+	LogDebug("[OUT RPC] RPC_RequestSpawn");
+	if (pChatWindow) pChatWindow->AddDebugMessage("[OUT RPC] RPC_RequestSpawn");
 }
 
 //----------------------------------------------------------
@@ -1169,6 +1208,9 @@ BOOL CLocalPlayer::Spawn()
 	RakNet::BitStream bsSendSpawn;
 	pNetGame->GetRakClient()->RPC(&RPC_Spawn,&bsSendSpawn,HIGH_PRIORITY,
 		RELIABLE_SEQUENCED,0,false, UNASSIGNED_NETWORK_ID, NULL);
+
+	LogDebug("[OUT RPC] RPC_Spawn sent to server");
+	if (pChatWindow) pChatWindow->AddDebugMessage("[OUT RPC] RPC_Spawn sent to server");
 
 	m_iDisplayZoneTick = GetTickCount() + 1000;
 	
@@ -1347,13 +1389,23 @@ void CLocalPlayer::SendStatsUpdate()
 {
 	RakNet::BitStream bsStats;
 	int iMoney = pGame->GetLocalMoney();
-	WORD wAmmo = m_pPlayerPed->GetAmmo();
-	//ScriptCommand(&get_player_weapon_ammo, GetCurrentWeapon()
+	int iDrunkLevel = 0;
 
 	bsStats.Write((BYTE)ID_STATS_UPDATE);
 	bsStats.Write(iMoney);
-	bsStats.Write(wAmmo);
+	bsStats.Write(iDrunkLevel);
 	pNetGame->GetRakClient()->Send(&bsStats,HIGH_PRIORITY,UNRELIABLE,0);
+
+	static DWORD dwLastDbgStats = 0;
+	if (GetTickCount() - dwLastDbgStats > 5000) {
+		dwLastDbgStats = GetTickCount();
+		LogDebug("[OUT PKT] ID_STATS_UPDATE (len: %d, money: %d, drunk: %d)",
+			1 + sizeof(int) * 2, iMoney, iDrunkLevel);
+		if (pChatWindow) {
+			pChatWindow->AddDebugMessage("[OUT PKT] ID_STATS_UPDATE (len: %d, money: %d)",
+				1 + sizeof(int) * 2, iMoney);
+		}
+	}
 }
 
 //----------------------------------------------------------

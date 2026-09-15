@@ -129,11 +129,7 @@ float CGame::FindGroundZForCoord(float x, float y, float z)
 BYTE byteGetKeyStateFunc[] = { 0xE8,0x46,0xF3,0xFE,0xFF };
 
 static int s_iCursorMode = 0;
-static bool s_bCursorPatchesApplied = false;
-
 static const BYTE s_orig541DF5[5] = { 0xE8, 0x46, 0xF3, 0xFE, 0xFF };
-static const BYTE s_orig53F417[5] = { 0xE8, 0xB4, 0x7A, 0x20, 0x00 };
-static const BYTE s_orig53F41F[4] = { 0x85, 0xC0, 0x0F, 0x8C };
 static const BYTE s_orig6194A0    = 0xE9;
 
 void CGame::ProcessInputDisabling()
@@ -404,70 +400,48 @@ void CGame::RefreshStreamingAt(float x, float y)
 void CGame::SetCursorMode(int nMode, BOOL bImmediatelyHideCursor)
 {
 	extern IDirect3DDevice9 *pD3DDevice;
-	LogDebug("SetCursorMode(%d), current=%d, applied=%d", nMode, s_iCursorMode, (int)s_bCursorPatchesApplied);
+	if (nMode == s_iCursorMode) return;
+	s_iCursorMode = nMode;
 
-	if (nMode == 2) {
-		// NOP 0x00541DF5 (5 bytes) to prevent GTA from resetting mouse position
+	if (nMode != 0) {
+		// Disable GTA mouse look and cursor centering
 		UnFuck(0x00541DF5, 5);
 		memset((void*)0x00541DF5, 0x90, 5);
 
-		// NOP 0x0053F417 (5 bytes) and patch 0x0053F41F to suppress camera look
-		UnFuck(0x0053F417, 5);
-		memset((void*)0x0053F417, 0x90, 5);
-		UnFuck(0x0053F41F, 4);
-		BYTE patch53F41F[4] = { 0x33, 0xC0, 0x0F, 0x84 };
-		memcpy((void*)0x0053F41F, patch53F41F, 4);
+		UnFuck(0x006194A0, 1);
+		*(BYTE*)0x006194A0 = 0xC3;
 
-		// Clear mouse deltas
-		*(int*)0x00B73418 = 0;
-		*(int*)0x00B7341C = 0;
+		*(int*)0x00B73424 = 0;
+		*(int*)0x00B73428 = 0;
 
 		typedef void(__cdecl* VoidFn_t)();
 		((VoidFn_t)0x00541BD0)();
 		((VoidFn_t)0x00541DD0)();
-
-		// Patch 0x006194A0 to RET
-		UnFuck(0x006194A0, 1);
-		*(BYTE*)0x006194A0 = 0xC3;
 
 		if (pD3DDevice) {
 			pD3DDevice->ShowCursor(TRUE);
 		}
 		ShowCursor(TRUE);
 		SetCursor(LoadCursor(NULL, IDC_ARROW));
-
-		s_iCursorMode = 2;
-		s_bCursorPatchesApplied = true;
-		return;
-	}
-
-	if (nMode == 0 && s_bCursorPatchesApplied) {
+	} else {
+		// Restore normal GTA mouse look & centering
 		UnFuck(0x00541DF5, 5);
 		memcpy((void*)0x00541DF5, s_orig541DF5, 5);
 
-		UnFuck(0x0053F417, 5);
-		memcpy((void*)0x0053F417, s_orig53F417, 5);
+		UnFuck(0x006194A0, 1);
+		*(BYTE*)0x006194A0 = s_orig6194A0;
 
-		UnFuck(0x0053F41F, 4);
-		memcpy((void*)0x0053F41F, s_orig53F41F, 4);
-
-		*(int*)0x00B73418 = 0;
-		*(int*)0x00B7341C = 0;
+		*(int*)0x00B73424 = 0;
+		*(int*)0x00B73428 = 0;
 
 		typedef void(__cdecl* VoidFn_t)();
 		((VoidFn_t)0x00541BD0)();
 		((VoidFn_t)0x00541DD0)();
 
-		UnFuck(0x006194A0, 1);
-		*(BYTE*)0x006194A0 = s_orig6194A0;
-
 		if (pD3DDevice) {
 			pD3DDevice->ShowCursor(FALSE);
 		}
 		ShowCursor(FALSE);
-
-		s_iCursorMode = 0;
-		s_bCursorPatchesApplied = false;
 	}
 }
 

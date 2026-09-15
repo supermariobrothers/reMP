@@ -104,7 +104,7 @@ void InitGame(RPCParameters *rpcParams)
 	bsInitGame.ReadBits((unsigned char*)&pNetGame->m_fNameTagDrawDistance, 32);
 	pNetGame->m_bDisableEnterExits = bsInitGame.ReadBit();
 	pNetGame->m_bNameTagLOS = bsInitGame.ReadBit();
-	pNetGame->m_bTirePopping = bsInitGame.ReadBit();
+	bool bManualVehicleEngineAndLights = bsInitGame.ReadBit();
 	bsInitGame.ReadBits((unsigned char*)&pNetGame->m_iSpawnsAvailable, 32);
 	bsInitGame.ReadBits((unsigned char*)&MyPlayerID, 16);
 	pNetGame->m_bShowPlayerTags = bsInitGame.ReadBit();
@@ -116,24 +116,31 @@ void InitGame(RPCParameters *rpcParams)
 	bsInitGame.ReadBits((unsigned char*)&pNetGame->m_fGravity, 32);
 	bLanMode = bsInitGame.ReadBit();
 	bsInitGame.ReadBits((unsigned char*)&pNetGame->m_iDeathDropMoney, 32);
+	bool bInstagib = bsInitGame.ReadBit();
 
 	// Server's send rate restrictions & nametag status
-	bsInitGame.ReadBits((unsigned char*)&iNetModeIdleOnfootSendRate, 32);
 	bsInitGame.ReadBits((unsigned char*)&iNetModeNormalOnfootSendRate, 32);
-	bsInitGame.ReadBits((unsigned char*)&iNetModeIdleIncarSendRate, 32);
 	bsInitGame.ReadBits((unsigned char*)&iNetModeNormalIncarSendRate, 32);
-	int iNameTagStatus = 0;
-	bsInitGame.ReadBits((unsigned char*)&iNameTagStatus, 32);
+	bsInitGame.ReadBits((unsigned char*)&iNetModeFiringSendRate, 32);
+	bsInitGame.ReadBits((unsigned char*)&iNetModeSendMultiplier, 32);
+	int iLagCompensation = 0;
+	bsInitGame.ReadBits((unsigned char*)&iLagCompensation, 32);
+
+	iNetModeIdleOnfootSendRate = iNetModeNormalOnfootSendRate;
+	iNetModeIdleIncarSendRate = iNetModeNormalIncarSendRate;
 
 	BYTE byteStrLen = 0;
 	bsInitGame.ReadBits(&byteStrLen, 8);
+	memset(pNetGame->m_szHostName, 0, sizeof(pNetGame->m_szHostName));
 	if (byteStrLen > 0) {
-		memset(pNetGame->m_szHostName, 0, sizeof(pNetGame->m_szHostName));
-		bsInitGame.Read(pNetGame->m_szHostName, byteStrLen);
+		if (byteStrLen >= sizeof(pNetGame->m_szHostName)) {
+			byteStrLen = sizeof(pNetGame->m_szHostName) - 1;
+		}
+		bsInitGame.ReadBits((unsigned char*)pNetGame->m_szHostName, byteStrLen * 8);
 		pNetGame->m_szHostName[byteStrLen] = '\0';
 	}
 
-	bsInitGame.Read((char*)byteVehicleModels, 212);
+	bsInitGame.ReadBits((unsigned char*)byteVehicleModels, 212 * 8);
 	pGame->SetRequiredVehicleModels(byteVehicleModels);
 
 	DWORD dwVehicleFriendlyFire = 0;
@@ -367,6 +374,7 @@ void RequestSpawn(RPCParameters *rpcParams)
 
 	if (pPlayer) { 
 		LogDebug("[RPC] RequestSpawn: outcome=%d, waiting=%d", byteRequestOutcome, pPlayer->m_bWaitingForSpawnRequestReply);
+		if (pChatWindow) pChatWindow->AddDebugMessage("[IN RPC] RequestSpawn outcome=%d", byteRequestOutcome);
 		if (byteRequestOutcome != 0) {
 			pPlayer->Spawn();
 		}
@@ -413,6 +421,8 @@ void WorldPlayerAdd(RPCParameters *rpcParams)
 
 	//pChatWindow->AddDebugMessage("WorldPlayerAdd(%u)",playerId);
 
+	if (pChatWindow) pChatWindow->AddDebugMessage("[IN RPC] WorldPlayerAdd id=%u skin=%d", playerId, iSkin);
+
 	if(pPlayerPool) {
 		pRemotePlayer = pPlayerPool->GetAt(playerId);
 		if(pRemotePlayer) pRemotePlayer->Spawn(byteTeam,iSkin,&vecPos,fRotation,dwColor,byteFightingStyle,bVisible);
@@ -429,16 +439,17 @@ void WorldPlayerDeath(RPCParameters *rpcParams)
 	PlayerID sender = rpcParams->sender;
 
 	RakNet::BitStream bsData((unsigned char*)Data,(iBitLength/8)+1,false);
+	CRemotePlayer *pRemotePlayer;
+	CPlayerPool *pPlayerPool = pNetGame->GetPlayerPool();
 
 	PLAYERID playerId;
-	CPlayerPool *pPlayerPool = pNetGame->GetPlayerPool();
 	bsData.Read(playerId);
 
-	//pChatWindow->AddDebugMessage("WorldPlayerDeath(%u)",playerId);
-
 	if(pPlayerPool) {
-		CRemotePlayer *pRemotePlayer = pPlayerPool->GetAt(playerId);
-		if(pRemotePlayer) pRemotePlayer->HandleDeath();
+		pRemotePlayer = pPlayerPool->GetAt(playerId);
+		if(pRemotePlayer) {
+			pRemotePlayer->HandleDeath();
+		}
 	}
 }
 
@@ -452,16 +463,18 @@ void WorldPlayerRemove(RPCParameters *rpcParams)
 	PlayerID sender = rpcParams->sender;
 
 	RakNet::BitStream bsData((unsigned char*)Data,(iBitLength/8)+1,false);
-
-	PLAYERID playerId=0;
+	CRemotePlayer *pRemotePlayer;
 	CPlayerPool *pPlayerPool = pNetGame->GetPlayerPool();
+
+	PLAYERID playerId;
 	bsData.Read(playerId);
 
-	//pChatWindow->AddDebugMessage("WorldPlayerRemove(%u)",playerId);
-
 	if(pPlayerPool) {
-		CRemotePlayer *pRemotePlayer = pPlayerPool->GetAt(playerId);
-		if(pRemotePlayer) pRemotePlayer->Remove();
+		pRemotePlayer = pPlayerPool->GetAt(playerId);
+		if(pRemotePlayer) {
+			pRemotePlayer->Remove();
+			pPlayerPool->Delete(playerId,0);
+		}
 	}
 }
 
@@ -482,9 +495,10 @@ void WorldVehicleAdd(RPCParameters *rpcParams)
 	int iBitLength = rpcParams->numberOfBitsOfData;
 	PlayerID sender = rpcParams->sender;
 
-	RakNet::BitStream bsData((unsigned char*)Data,(iBitLength/8)+1,false);
 	CVehiclePool *pVehiclePool = pNetGame->GetVehiclePool();
 	if(!pVehiclePool) return;
+
+	RakNet::BitStream bsData((unsigned char*)Data,(iBitLength/8)+1,false);
 
 	NEW_VEHICLE NewVehicle;
 	memset(&NewVehicle, 0, sizeof(NEW_VEHICLE));
@@ -493,6 +507,12 @@ void WorldVehicleAdd(RPCParameters *rpcParams)
 
 	LogDebug("[RPC] WorldVehicleAdd: id=%u, type=%d, pos=(%.1f, %.1f, %.1f)",
 		NewVehicle.VehicleId, NewVehicle.iVehicleType, NewVehicle.vecPos.X, NewVehicle.vecPos.Y, NewVehicle.vecPos.Z);
+
+	static DWORD dwLastVehMsg = 0;
+	if (GetTickCount() - dwLastVehMsg > 1000) {
+		dwLastVehMsg = GetTickCount();
+		if (pChatWindow) pChatWindow->AddDebugMessage("[IN RPC] WorldVehicleAdd id=%u model=%d", NewVehicle.VehicleId, NewVehicle.iVehicleType);
+	}
 
 	if(NewVehicle.iVehicleType < 400 || NewVehicle.iVehicleType > 611) return; 
 

@@ -29,13 +29,14 @@ typedef struct _PLAYER_SPAWN_INFO
 	int iSpawnWeaponsAmmo[3];
 } PLAYER_SPAWN_INFO;
 
+#pragma pack(push, 1)
 typedef struct _ONFOOT_SYNC_DATA
 {
 	WORD lrAnalog;
 	WORD udAnalog;
 	WORD wKeys;
 	VECTOR vecPos;
-	float fRotation;
+	float fQuaternion[4];
 	BYTE byteHealth;
 	BYTE byteArmour;
 	BYTE byteCurrentWeapon;
@@ -43,6 +44,8 @@ typedef struct _ONFOOT_SYNC_DATA
 	VECTOR vecMoveSpeed;
 	VECTOR vecSurfOffsets;
 	WORD wSurfInfo;
+	WORD wAnimIndex;
+	WORD wAnimFlags;
 } ONFOOT_SYNC_DATA;
 
 enum eWeaponState
@@ -53,19 +56,17 @@ enum eWeaponState
 	WS_RELOADING = 3,
 };
 
-#pragma pack(1)
 typedef struct _AIM_SYNC_DATA
 {
 	BYTE byteCamMode;
-	BYTE byteCamExtZoom : 6;	// 0-63 normalized
-	BYTE byteWeaponState : 2;	// see eWeaponState
 	VECTOR vecAimf1;
-	VECTOR vecAimf2;
 	VECTOR vecAimPos;
 	float fAimZ;
+	BYTE byteCamExtZoom : 6;	// 0-63 normalized
+	BYTE byteWeaponState : 2;	// see eWeaponState
+	BYTE byteAspectRatio;
 } AIM_SYNC_DATA;
 
-#pragma pack(1)
 typedef struct _UNOCCUPIED_SYNC_DATA
 {
 	VEHICLEID VehicleID;
@@ -77,7 +78,6 @@ typedef struct _UNOCCUPIED_SYNC_DATA
 	float fHealth;
 } UNOCCUPIED_SYNC_DATA;
 
-#pragma pack(1)
 typedef struct _TAGINFO
 {
 	char szTag[MAX_PLAYER_NAME+1];
@@ -87,28 +87,29 @@ typedef struct _TAGINFO
 	BOOL bActive;
 } TAG_INFO;
 
-#pragma pack(1)
 typedef struct _INCAR_SYNC_DATA
 {
 	VEHICLEID VehicleID;
 	WORD lrAnalog;
 	WORD udAnalog;
 	WORD wKeys;
-	C_VECTOR1 cvecRoll;
-	C_VECTOR1 cvecDirection;
+	float fQuaternion[4];
 	VECTOR vecPos;
 	VECTOR vecMoveSpeed;
 	float fCarHealth;
 	BYTE bytePlayerHealth;
 	BYTE bytePlayerArmour;
 	BYTE byteCurrentWeapon;
-    BYTE byteSirenOn;
+	BYTE byteSirenOn;
 	BYTE byteLandingGearState;
-	BYTE byteTires[4];
 	VEHICLEID TrailerID;
-	DWORD dwHydraThrustAngle;
-	FLOAT fTrainSpeed;
+	union
+	{
+		DWORD dwHydraThrustAngle;
+		FLOAT fTrainSpeed;
+	};
 } INCAR_SYNC_DATA;
+#pragma pack(pop)
 
 #pragma pack(1)
 typedef struct _PASSENGER_SYNC_DATA

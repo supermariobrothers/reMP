@@ -350,6 +350,34 @@ void CNetGame::Process()
 // UPDATE NETWORK
 //----------------------------------------------------
 
+static const char* GetPacketName(BYTE id)
+{
+	switch (id)
+	{
+	case ID_PLAYER_SYNC: return "ID_PLAYER_SYNC (207)";
+	case ID_MARKERS_SYNC: return "ID_MARKERS_SYNC (208)";
+	case ID_UNOCCUPIED_SYNC: return "ID_UNOCCUPIED_SYNC (209)";
+	case ID_TRAILER_SYNC: return "ID_TRAILER_SYNC (210)";
+	case ID_PASSENGER_SYNC: return "ID_PASSENGER_SYNC (211)";
+	case ID_SPECTATOR_SYNC: return "ID_SPECTATOR_SYNC (212)";
+	case ID_AIM_SYNC: return "ID_AIM_SYNC (203)";
+	case ID_VEHICLE_SYNC: return "ID_VEHICLE_SYNC (200)";
+	case ID_RCON_COMMAND: return "ID_RCON_COMMAND (201)";
+	case ID_RCON_RESPONCE: return "ID_RCON_RESPONCE (202)";
+	case ID_WEAPONS_UPDATE: return "ID_WEAPONS_UPDATE (204)";
+	case ID_STATS_UPDATE: return "ID_STATS_UPDATE (205)";
+	case ID_BULLET_SYNC: return "ID_BULLET_SYNC (206)";
+	case ID_AUTH_KEY: return "ID_AUTH_KEY (213)";
+	case ID_CONNECTION_REQUEST_ACCEPTED: return "ID_CONNECTION_REQUEST_ACCEPTED (16)";
+	case ID_CONNECTION_ATTEMPT_FAILED: return "ID_CONNECTION_ATTEMPT_FAILED (17)";
+	case ID_NO_FREE_INCOMING_CONNECTIONS: return "ID_NO_FREE_INCOMING_CONNECTIONS (20)";
+	case ID_DISCONNECTION_NOTIFICATION: return "ID_DISCONNECTION_NOTIFICATION (21)";
+	case ID_CONNECTION_LOST: return "ID_CONNECTION_LOST (22)";
+	case ID_INVALID_PASSWORD: return "ID_INVALID_PASSWORD (23)";
+	default: return "UNKNOWN_PACKET";
+	}
+}
+
 void CNetGame::UpdateNetwork()
 {
 	Packet* pkt=NULL;
@@ -358,8 +386,9 @@ void CNetGame::UpdateNetwork()
 	while((pkt = m_pRakClient->Receive()))
 	{
 		packetIdentifier = GetPacketID(pkt);
+		LogDebug("[IN PKT] %s, len: %d", GetPacketName(packetIdentifier), pkt->length);
 		if (pChatWindow) {
-			pChatWindow->AddDebugMessage("[NET PKT] ID: %d (len: %d)", packetIdentifier, pkt->length);
+			pChatWindow->AddDebugMessage("[IN PKT] %s, len: %d", GetPacketName(packetIdentifier), pkt->length);
 		}
 
 		switch(packetIdentifier)
@@ -466,7 +495,7 @@ void CNetGame::Packet_PlayerSync(Packet *p)
 	bsPlayerSync.Read((char*)&ofSync.vecPos,sizeof(VECTOR));
 
 	// ROTATION
-	bsPlayerSync.Read(ofSync.fRotation);
+	bsPlayerSync.ReadNormQuat(ofSync.fQuaternion[0], ofSync.fQuaternion[1], ofSync.fQuaternion[2], ofSync.fQuaternion[3]);
 	
 	// HEALTH/ARMOUR (COMPRESSED INTO 1 BYTE)
 	BYTE byteHealthArmour;
@@ -603,9 +632,8 @@ void CNetGame::Packet_VehicleSync(Packet *p)
 	bsSync.Read(icSync.udAnalog);
 	bsSync.Read(icSync.wKeys);
 
-	// ROLL / DIRECTION / POSITION / MOVE SPEED
-	bsSync.Read((char*)&icSync.cvecRoll,sizeof(C_VECTOR1));
-	bsSync.Read((char*)&icSync.cvecDirection,sizeof(C_VECTOR1));
+	// ROTATION / POSITION / MOVE SPEED
+	bsSync.ReadNormQuat(icSync.fQuaternion[0], icSync.fQuaternion[1], icSync.fQuaternion[2], icSync.fQuaternion[3]);
 	bsSync.Read((char*)&icSync.vecPos,sizeof(VECTOR));
 	bsSync.Read((char*)&icSync.vecMoveSpeed,sizeof(VECTOR));
 
@@ -640,17 +668,6 @@ void CNetGame::Packet_VehicleSync(Packet *p)
 	// LANDING GEAR
 	bsSync.Read(bLandingGear);
 	if(bLandingGear) icSync.byteLandingGearState = 1;
-
-	if (m_bTirePopping) {
-		bsSync.Read(bTire);
-		if (bTire) icSync.byteTires[0] = 1;
-		bsSync.Read(bTire);
-		if (bTire) icSync.byteTires[1] = 1;
-		bsSync.Read(bTire);
-		if (bTire) icSync.byteTires[2] = 1;
-		bsSync.Read(bTire);
-		if (bTire) icSync.byteTires[3] = 1;
-	}
 
 	// HYDRA SPECIAL
 	bsSync.Read(bHydra);

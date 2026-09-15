@@ -348,10 +348,10 @@ HRESULT __stdcall IDirect3DDevice9Hook::Present(CONST RECT* pSourceRect, CONST R
 
 		// Scoreboard
 		if(pNetGame && !pCmdWindow->isEnabled() &&
-			((GetAsyncKeyState(VK_TAB) && !pCmdWindow->isEnabled()) || pNetGame->GetGameState() == GAMESTATE_RESTARTING))
+			(((GetAsyncKeyState(VK_TAB) & 0x8000) && !pCmdWindow->isEnabled()) || pNetGame->GetGameState() == GAMESTATE_RESTARTING))
 		{
 			pGame->DisplayHud(FALSE);
-//			pScoreBoard->Draw();
+			pScoreBoard->Draw();
 		}		
 		// Help Dialog
 		else if(pNetGame && GetAsyncKeyState(VK_F1))
