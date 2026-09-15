@@ -39,7 +39,7 @@ BOOL CVehiclePool::New(NEW_VEHICLE *pNewVehicle)
 		pNewVehicle->vecPos.X,pNewVehicle->vecPos.Y,pNewVehicle->vecPos.Z,
 		pNewVehicle->fRotation, NULL);
 
-	if(m_pVehicles[pNewVehicle->VehicleId])
+	if(m_pVehicles[pNewVehicle->VehicleId] && m_pVehicles[pNewVehicle->VehicleId]->m_pVehicle)
 	{	
 		if(pNewVehicle->aColor1 != -1 || pNewVehicle->aColor2 != -1) {
 			m_pVehicles[pNewVehicle->VehicleId]->SetColor( 
@@ -74,6 +74,12 @@ BOOL CVehiclePool::New(NEW_VEHICLE *pNewVehicle)
 	}
 	else
 	{
+		if (m_pVehicles[pNewVehicle->VehicleId]) {
+			delete m_pVehicles[pNewVehicle->VehicleId];
+			m_pVehicles[pNewVehicle->VehicleId] = NULL;
+		}
+		m_pGTAVehicles[pNewVehicle->VehicleId] = 0;
+		m_bVehicleSlotState[pNewVehicle->VehicleId] = FALSE;
 		return FALSE;
 	}
 }
@@ -279,33 +285,6 @@ void CVehiclePool::ProcessWaitingList()
 		if(m_bWaitingSlotState[x] && pGame->IsModelLoaded(m_NewVehicleWaiting[x].iVehicleType))
 		{		
 			New(&m_NewVehicleWaiting[x]);
-    
-			// TRAIN STUFF
-			if(m_NewVehicleWaiting[x].iVehicleType == TRAIN_FREIGHT_LOCO) {
-				m_NewVehicleWaiting[x].iVehicleType = TRAIN_FREIGHT;
-
-				m_NewVehicleWaiting[x].VehicleId++;
-				New(&m_NewVehicleWaiting[x]);
-
-				m_NewVehicleWaiting[x].VehicleId++;
-				New(&m_NewVehicleWaiting[x]);
-
-				m_NewVehicleWaiting[x].VehicleId++;
-				New(&m_NewVehicleWaiting[x]);	
-			}
-
-			if(m_NewVehicleWaiting[x].iVehicleType == TRAIN_PASSENGER_LOCO) {
-				m_NewVehicleWaiting[x].iVehicleType = TRAIN_PASSENGER;
-
-				m_NewVehicleWaiting[x].VehicleId++;
-				New(&m_NewVehicleWaiting[x]);
-
-				m_NewVehicleWaiting[x].VehicleId++;
-				New(&m_NewVehicleWaiting[x]);
-
-				m_NewVehicleWaiting[x].VehicleId++;
-				New(&m_NewVehicleWaiting[x]);	
-			}
 			m_bWaitingSlotState[x] = FALSE;
 		}
 		x++;

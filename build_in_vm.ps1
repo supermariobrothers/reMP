@@ -21,6 +21,8 @@ Write-Host 1. Copying files to guest VM...
 & $vmrun -T ws -gu yello -gp password CopyFileFromHostToGuest $vmx $hostDir\client\scoreboard.h $guestDir\client\scoreboard.h
 & $vmrun -T ws -gu yello -gp password CopyFileFromHostToGuest $vmx $hostDir\client\net\vehiclepool.h $guestDir\client\net\vehiclepool.h
 & $vmrun -T ws -gu yello -gp password CopyFileFromHostToGuest $vmx $hostDir\client\net\vehiclepool.cpp $guestDir\client\net\vehiclepool.cpp
+& $vmrun -T ws -gu yello -gp password CopyFileFromHostToGuest $vmx $hostDir\client\game\vehicle.cpp $guestDir\client\game\vehicle.cpp
+& $vmrun -T ws -gu yello -gp password CopyFileFromHostToGuest $vmx $hostDir\client\game\vehicle.h $guestDir\client\game\vehicle.h
 
 Write-Host 2. Running build in guest VM...
 $cmdArg = '/c cd ' + $guestDir + ' && call build_exact.bat > build_exact.log 2>&1'

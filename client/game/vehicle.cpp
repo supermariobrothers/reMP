@@ -17,6 +17,34 @@ DWORD	dwNumVehicles=0;
 BYTE	*pbvCurrentPlayer = (BYTE *)0xB7CD74;
 
 //-----------------------------------------------------------
+static DWORD SafeCreateCar(int iType, float fPosX, float fPosY, float fPosZ, float fRotation)
+{
+	DWORD dwRetID = 0;
+	__try {
+		ScriptCommand(&create_car, iType, fPosX, fPosY, fPosZ + 0.1f, &dwRetID);
+		if (dwRetID) {
+			ScriptCommand(&set_car_z_angle, dwRetID, fRotation);
+			ScriptCommand(&car_gas_tank_explosion, dwRetID, 0);
+			ScriptCommand(&set_car_hydraulics, dwRetID, 0);
+			ScriptCommand(&toggle_car_tires_vulnerable, dwRetID, 0);
+		}
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		dwRetID = 0;
+	}
+	return dwRetID;
+}
+
+static DWORD SafeCreateTrain(int iTrainType, float fPosX, float fPosY, float fPosZ, DWORD dwDirection)
+{
+	DWORD dwRetID = 0;
+	__try {
+		ScriptCommand(&create_train, iTrainType, fPosX, fPosY, fPosZ, dwDirection, &dwRetID);
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		dwRetID = 0;
+	}
+	return dwRetID;
+}
+
 // CONSTRUCTOR
 
 CVehicle::CVehicle( int iType, float fPosX, float fPosY,
@@ -39,31 +67,34 @@ CVehicle::CVehicle( int iType, float fPosX, float fPosY,
 
 		// NORMAL VEHICLE
 		if(!pGame->IsModelLoaded(iType)) {
-			//pChatWindow->AddDebugMessage("Warning: car model not preloaded. %d",iType);
 			pGame->RequestModel(iType);
 			pGame->LoadRequestedModels();
-			while(!pGame->IsModelLoaded(iType)) Sleep(0);
-		} else {
-			//pChatWindow->AddDebugMessage("Car model was preloaded. %d",iType);
+			int iWait = 0;
+			while(!pGame->IsModelLoaded(iType) && iWait < 50) {
+				Sleep(10);
+				iWait++;
+			}
 		}
 
 		if (szNumberPlate && szNumberPlate[0]) 
 			ScriptCommand(&set_car_numberplate, iType, szNumberPlate);
 
-		ScriptCommand(&create_car,iType,fPosX,fPosY,fPosZ+0.1f,&dwRetID);
-		ScriptCommand(&set_car_z_angle,dwRetID,fRotation);
-		ScriptCommand(&car_gas_tank_explosion,dwRetID,0);
-		ScriptCommand(&set_car_hydraulics,dwRetID,0);
-		ScriptCommand(&toggle_car_tires_vulnerable,dwRetID,0);
-		
-		//LinkToInterior(m_byteInterior);
+		dwRetID = SafeCreateCar(iType, fPosX, fPosY, fPosZ, fRotation);
 
-		m_pVehicle = GamePool_Vehicle_GetAt(dwRetID);
-		m_pEntity = (ENTITY_TYPE *)m_pVehicle; 
-		m_dwGTAId = dwRetID;
-		dwLastCreatedVehicleID = dwRetID;
-		m_pVehicle->dwDoorsLocked = 0;
-		m_bIsLocked = FALSE;
+		if (dwRetID) {
+			m_pVehicle = GamePool_Vehicle_GetAt(dwRetID);
+			m_pEntity = (ENTITY_TYPE *)m_pVehicle; 
+			m_dwGTAId = dwRetID;
+			dwLastCreatedVehicleID = dwRetID;
+			if (m_pVehicle) {
+				m_pVehicle->dwDoorsLocked = 0;
+			}
+			m_bIsLocked = FALSE;
+		} else {
+			m_pVehicle = NULL;
+			m_pEntity = NULL;
+			m_dwGTAId = 0;
+		}
 
 		// Model will be unloaded when no longer needed
 		m_bKeepModelLoaded = bKeepModelLoaded;
@@ -74,9 +105,10 @@ CVehicle::CVehicle( int iType, float fPosX, float fPosY,
 
 		// TRAIN LOCOMOTIVES
 
-		if(iType == TRAIN_PASSENGER_LOCO) iType = 5;
-		else if(iType == TRAIN_FREIGHT_LOCO) iType = 3;
-		else if(iType == TRAIN_TRAM) iType = 9;
+		int iTrainType = iType;
+		if(iType == TRAIN_PASSENGER_LOCO) iTrainType = 5;
+		else if(iType == TRAIN_FREIGHT_LOCO) iTrainType = 3;
+		else if(iType == TRAIN_TRAM) iTrainType = 9;
 
 		DWORD dwDirection=0;
 		if(fRotation > 180.0f) {
@@ -88,22 +120,29 @@ CVehicle::CVehicle( int iType, float fPosX, float fPosY,
 		pGame->RequestModel(TRAIN_FREIGHT);
 		pGame->RequestModel(TRAIN_TRAM);
 		pGame->LoadRequestedModels();
-		while(!pGame->IsModelLoaded(TRAIN_PASSENGER_LOCO)) Sleep(0);
-		while(!pGame->IsModelLoaded(TRAIN_PASSENGER)) Sleep(0);
-		while(!pGame->IsModelLoaded(TRAIN_FREIGHT_LOCO)) Sleep(0);
-		while(!pGame->IsModelLoaded(TRAIN_FREIGHT)) Sleep(0);
-		while(!pGame->IsModelLoaded(TRAIN_TRAM)) Sleep(0);
+		
+		int iWait = 0;
+		while(!pGame->IsModelLoaded(iType) && iWait < 50) {
+			Sleep(10);
+			iWait++;
+		}
 	
-		ScriptCommand(&create_train,iType,fPosX,fPosY,fPosZ,dwDirection,&dwRetID);
+		dwRetID = SafeCreateTrain(iTrainType, fPosX, fPosY, fPosZ, dwDirection);
 
-		m_pVehicle = GamePool_Vehicle_GetAt(dwRetID);
-		m_pEntity = (ENTITY_TYPE *)m_pVehicle; 
-		m_dwGTAId = dwRetID;
-		dwLastCreatedVehicleID = dwRetID;
-		pLastVehicle = m_pVehicle;
+		if (dwRetID) {
+			m_pVehicle = GamePool_Vehicle_GetAt(dwRetID);
+			m_pEntity = (ENTITY_TYPE *)m_pVehicle; 
+			m_dwGTAId = dwRetID;
+			dwLastCreatedVehicleID = dwRetID;
+			pLastVehicle = m_pVehicle;
 
-		GamePrepareTrain(m_pVehicle);
-		//ScriptCommand(&set_train_flag, &dwRetID, 0);
+			if (m_pVehicle) GamePrepareTrain(m_pVehicle);
+		} else {
+			m_pVehicle = NULL;
+			m_pEntity = NULL;
+			m_dwGTAId = 0;
+			pLastVehicle = NULL;
+		}
 	}
 	else if((iType == TRAIN_PASSENGER) ||
 			(iType == TRAIN_FREIGHT) ) {
